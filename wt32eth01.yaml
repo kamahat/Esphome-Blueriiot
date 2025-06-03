@@ -23,6 +23,11 @@ substitutions:
   blueriiot_recieve_service_uuid: 'F3300001-F0A2-9B06-0C59-1BC4763B5C00'
   blueriiot_recieve_characteristic_uuid: 'F3300003-F0A2-9B06-0C59-1BC4763B5C00'
 
+#
+# =====================
+# Source Info : https://community.home-assistant.io/t/blue-connect-pool-measurements/118901/420?page=11
+#
+#
 # =====================
 # rev 2024-06-26
 #
@@ -51,12 +56,7 @@ esp32:
   board: ${board}
   framework:
     type: esp-idf
-    #version: 5.1.2
-    #version: latest
-    # platform_version: 6.5.0
-    #sdkconfig_options:
-    #  COMPILER_OPTIMIZATION_SIZE: y  
-    #  CONFIG_ESPTOOLPY_FLASHSIZE_4MB: y
+
 
 # Packages :
 packages : 
@@ -72,14 +72,13 @@ logger:
 # Enable Home Assistant API
 api:
   encryption:
-    key: !secret api_key_esp-182
+    key: !secret 
 
 ota:
    - platform: esphome
-     password: !secret ota_password
+     password: !secret 
 
 #====================
-
 esp32_ble_tracker:
   scan_parameters:
     active: false
@@ -151,7 +150,7 @@ sensor:
   - platform: template 
     id: sensor_${blueriiot_id_prefix}_ph
     name: ${blueriiot_name_prefix} pH
-    unit_of_measurement: "pH"
+    # sunit_of_measurement: "ph"
     icon: mdi:ph
     state_class: "measurement"
     device_class: "PH"
@@ -172,7 +171,7 @@ sensor:
         then:
           - text_sensor.template.publish:
               id: text_sensor_${blueriiot_id_prefix}_ph
-              state: "Good"
+              state: "GOOD"
   - platform: template 
     id: sensor_${blueriiot_id_prefix}_orp
     name: ${blueriiot_name_prefix} Chlore
@@ -197,7 +196,7 @@ sensor:
         then:
           - text_sensor.template.publish:
               id: text_sensor_${blueriiot_id_prefix}_orp
-              state: "Good"
+              state: "GOOD"
   - platform: template 
     id: sensor_${blueriiot_id_prefix}_bat
     name: ${blueriiot_name_prefix} Batterie
@@ -217,41 +216,50 @@ sensor:
     state_class: "measurement"
     accuracy_decimals: 1
     on_value_range:
-      - below: 2.5
+      - below: 2.49
         then:
           - text_sensor.template.publish:
               id: text_sensor_${blueriiot_id_prefix}_salt
-              state: "Low"
-      - above: 4.0
+              state: "LOW"
+      - above: 4.01
         then:
           - text_sensor.template.publish:
               id: text_sensor_${blueriiot_id_prefix}_salt
-              state: "High"
-      - above: 2.51
-        below: 3.99
+              state: "HIGH"
+      - above: 2.5
+        below: 4.0
         then:
           - text_sensor.template.publish:
               id: text_sensor_${blueriiot_id_prefix}_salt
-              state: "Good"
+              state: "GOOD"
+#
   - platform: template 
-    id: sensor_${blueriiot_id_prefix}_cond
+    id: sensor_${blueriiot_id_prefix}_ecs
     name: ${blueriiot_name_prefix} Conductivité
     # Optional variables:
     unit_of_measurement: "µS/cm"
     icon: "mdi:water-sync"
     state_class: "measurement"
     accuracy_decimals: 0
+
+  - platform: template
+    id: sensor_${blueriiot_id_prefix}_chlor
+    name: "${blueriiot_name_prefix} Chlorine"
+    unit_of_measurement: "PPM"
+    icon: "mdi:water-sync"
+    state_class: "measurement"
+    accuracy_decimals: 3
     
 text_sensor:
   - platform: template
     id: text_sensor_${blueriiot_id_prefix}_salt
-    name: ${blueriiot_name_prefix} Salinité Status
+    name: ${blueriiot_name_prefix} Salinité Statut
   - platform: template
     id: text_sensor_${blueriiot_id_prefix}_ph
-    name: ${blueriiot_name_prefix} pH Status
+    name: ${blueriiot_name_prefix} pH Statut
   - platform: template
     id: text_sensor_${blueriiot_id_prefix}_orp
-    name: ${blueriiot_name_prefix} Chlore Concentration Status
+    name: ${blueriiot_name_prefix} Chlore Concentration Statut
   - platform: template
     name: Blueriiot last update
     id: uptime_blueriiot
@@ -268,6 +276,11 @@ text_sensor:
     update_interval: never
     on_notify:
       then:
+          # https://community.home-assistant.io/t/blue-connect-pool-measurements/118901/432
+          # float salt = (float) (int16_t) 1 / (raw_cond * 0.001) * 1.0615 * 500 / 1000 ;
+          # This is experimental and should not be used to dose a pool. Always check with test strips.
+          # float chlor = (float)( ( (int16_t) (x[6]<< 8) + x[5]) / 4 - 5 - 650 ) / 200 * 10;
+          # [VGT 20250603] float orp = (float)( (int16_t) (x[6]<< 8) + x[5]) / 3.86  - 21.57826;
         - lambda: |-
             std::string rawhex = format_hex_pretty((uint8_t *) x.c_str(), x.size()).c_str();
             ESP_LOGD("raw_hex", "%s", rawhex.c_str());
@@ -277,34 +290,43 @@ text_sensor:
             id(sensor_${blueriiot_id_prefix}_temperature).publish_state(temperature);
                 
             float raw_ph = (float)( (int16_t) (x[4]<< 8) + x[3]) ;
-            float ph = (float)( (int16_t) (2048 - raw_ph)) / 232  + 7 ; 
+            float ph = (float)( (int16_t) (2048 - raw_ph)) / 232.0  + 7.0 ; 
             ESP_LOGD("ph", "%f", ph);
             id(sensor_${blueriiot_id_prefix}_ph).publish_state(ph);
             
-            float orp = (float)( (int16_t) (x[6]<< 8) + x[5]) / 3.86  - 21.57826;
+            float raw_orp = (float)( (int16_t) (x[6]<< 8) + x[5]);
+            float orp = (float)( (int16_t) raw_orp / 4.0 ) - 5.0;
             ESP_LOGD("orp", "%f", orp);
             id(sensor_${blueriiot_id_prefix}_orp).publish_state(orp);
+
+            float chlor = (float)(int16_t) raw_orp / 4.0 - 5.0 - 650.0 / 200.0 * 10.0;
+            ESP_LOGD("chlor", "%f", chlor);
+            id(sensor_${blueriiot_id_prefix}_chlor).publish_state(chlor);
             
             float raw_cond = (float)( (int16_t) (x[8]<< 8) + x[7]);
+            if (raw_cond != 0) {
+              float ecs = (float) (int16_t) 1 / (raw_cond * 0.000001) * 1.0615 ;
+              ESP_LOGD("ecs", "%f", ecs);
+              id(sensor_${blueriiot_id_prefix}_ecs).publish_state(ecs);
 
-            float salt = (float) (int16_t) 1 / (raw_cond * 0.001) * 1.0615 * 500 / 1000 ;
-            ESP_LOGD("salt", "%f", salt);
-            id(sensor_${blueriiot_id_prefix}_salt).publish_state(salt);
-            
-            float cond = (float) (int16_t) 1 / (raw_cond * 0.000001) * 1.0615 ;
-            ESP_LOGD("cond", "%f", cond);
-            id(sensor_${blueriiot_id_prefix}_cond).publish_state(cond);
-            
-            float bat = (float)( (int16_t) x[11]) / 36 * 100;
+              float salt = (float) (int16_t) 1.0 / (raw_cond * 0.001) * 1.0615 * 500 / 1000 ;
+              ESP_LOGD("salt", "%f", salt);
+              id(sensor_${blueriiot_id_prefix}_salt).publish_state(salt);
+
+            } else {
+              ESP_LOGD("ecs", "raw_cond is zero, skipping ECS calculation");
+              id(sensor_${blueriiot_id_prefix}_ecs).publish_state(0);
+              ESP_LOGD("salt", "raw_cond is zero, skipping SALT calculation");
+              id(sensor_${blueriiot_id_prefix}_salt).publish_state(0);
+            }
+
+            float bat = (float)( (int16_t) x[11]) * 100 / 36;
             ESP_LOGD("bat", "%f", bat);
             id(sensor_${blueriiot_id_prefix}_bat).publish_state(bat);
             
             id(switch_${blueriiot_id_prefix}_enable).turn_off();
-        - text_sensor.template.publish:
-                id: uptime_blueriiot
-                state: !lambda |-
-                  return  id(homeassistant_time).now().strftime("%Y-%m-%d %H:%M");
+        - lambda: |-
+            id(uptime_blueriiot).publish_state(id(homeassistant_time).now().strftime("%Y-%m-%d %H:%M"));
 #
 # 
-#
 #
