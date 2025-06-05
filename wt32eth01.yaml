@@ -30,6 +30,8 @@ substitutions:
 # rev 2025-06-05
 # - All LOW/GOOD/BAD relation for Salt concentraiton linkted to temperature
 # - correcte chlorine sensor
+# - correction battery
+# - change uptime 
 # =====================
 #
 esphome:
@@ -119,7 +121,11 @@ binary_sensor:
     entity_category: diagnostic
 
 #
+
 sensor: 
+  - platform: uptime
+    type: seconds
+    name: Uptime Sensor
   - platform: template 
     id: sensor_${blueriiot_id_prefix}_temperature
     name: ${blueriiot_name_prefix} Temperature
@@ -137,24 +143,26 @@ sensor:
     icon: mdi:ph
     state_class: "measurement"
     device_class: "PH"
-    accuracy_decimals: 1
+    accuracy_decimals: 2
+    filters:
+      - round: 2
     on_value_range: 
-      - below: 7.2
+      - below: 7.1
         then:
           - text_sensor.template.publish:
               id: text_sensor_${blueriiot_id_prefix}_ph
               state: "LOW"
-      - above: 7.6
-        then:
-          - text_sensor.template.publish:
-              id: text_sensor_${blueriiot_id_prefix}_ph
-              state: "HIGH"
-      - above: 7.201
-        below: 7.599
+      - above: 7.1
+        below: 7.5
         then:
           - text_sensor.template.publish:
               id: text_sensor_${blueriiot_id_prefix}_ph
               state: "GOOD"
+      - above: 7.5
+        then:
+          - text_sensor.template.publish:
+              id: text_sensor_${blueriiot_id_prefix}_ph
+              state: "HIGH"
   - platform: template 
     id: sensor_${blueriiot_id_prefix}_orp
     name: ${blueriiot_name_prefix} Chlore
@@ -162,7 +170,9 @@ sensor:
     icon: mdi:biohazard
     device_class: "voltage"
     state_class: "measurement"
-    accuracy_decimals: 1
+    accuracy_decimals: 0
+    filters:
+      - round: 0
     on_value_range:
       - below: 649
         then:
@@ -210,7 +220,7 @@ sensor:
             } else {
               id(text_sensor_${blueriiot_id_prefix}_salt).publish_state("GOOD");
             };
-#
+        
   - platform: template 
     id: sensor_${blueriiot_id_prefix}_ecs
     name: ${blueriiot_name_prefix} Conductivité
@@ -226,8 +236,10 @@ sensor:
     unit_of_measurement: "PPM"
     icon: "mdi:water-sync"
     state_class: "measurement"
-    accuracy_decimals: 3
-    
+    accuracy_decimals: 0
+    filters:
+      - round: 0
+
 text_sensor:
   - platform: template
     id: text_sensor_${blueriiot_id_prefix}_salt
@@ -241,8 +253,7 @@ text_sensor:
   - platform: template
     name: Blueriiot last update
     id: uptime_blueriiot
-    update_interval: never
-    icon: mdi:clock-start
+#
   - platform: ble_client
     id: ${blueriiot_id_prefix}_reading_data
     name: ${blueriiot_name_prefix} reading data
@@ -259,6 +270,7 @@ text_sensor:
           # This is experimental and should not be used to dose a pool. Always check with test strips.
           # float chlor = (float)( ( (int16_t) (x[6]<< 8) + x[5]) / 4 - 5 - 650 ) / 200 * 10;
           # [VGT 20250603] float orp = (float)( (int16_t) (x[6]<< 8) + x[5]) / 3.86  - 21.57826;
+          # [VGT 20250605] Bat :  BATT_MAX_MV = 3640 ; BATT_MIN_MV = 3400
         - lambda: |-
             std::string rawhex = format_hex_pretty((uint8_t *) x.c_str(), x.size()).c_str();
             ESP_LOGD("raw_hex", "%s", rawhex.c_str());
@@ -298,12 +310,13 @@ text_sensor:
               id(sensor_${blueriiot_id_prefix}_salt).publish_state(0);
             }
 
-            float bat = (float)( (int16_t) x[11]) * 100 / 36;
+            float raw_bat = (float)( (int16_t) (x[10]<< 8) + x[9]);
+            float bat = (float) (raw_bat - 3400) / (3640 - 3400) * 100.0;
             ESP_LOGD("bat", "%f", bat);
             id(sensor_${blueriiot_id_prefix}_bat).publish_state(bat);
             
             id(switch_${blueriiot_id_prefix}_enable).turn_off();
-        - lambda: |-
+
             id(uptime_blueriiot).publish_state(id(homeassistant_time).now().strftime("%Y-%m-%d %H:%M"));
 #
 # 
