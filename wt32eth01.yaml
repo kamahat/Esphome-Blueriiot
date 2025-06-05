@@ -215,23 +215,18 @@ sensor:
     icon: mdi:shaker-outline
     state_class: "measurement"
     accuracy_decimals: 1
-    on_value_range:
-      - below: 2.49
-        then:
-          - text_sensor.template.publish:
-              id: text_sensor_${blueriiot_id_prefix}_salt
-              state: "LOW"
-      - above: 4.01
-        then:
-          - text_sensor.template.publish:
-              id: text_sensor_${blueriiot_id_prefix}_salt
-              state: "HIGH"
-      - above: 2.5
-        below: 4.0
-        then:
-          - text_sensor.template.publish:
-              id: text_sensor_${blueriiot_id_prefix}_salt
-              state: "GOOD"
+    # relation between ideal salt concention and temperature : salt[g/l] = 5 - 0.8 * temperature [°C]
+    # inteval  BELOW/ABOVE : [-0.6 ; +0.6]
+    on_value:
+      then:
+        - lambda: |-
+            if ( id(sensor_${blueriiot_id_prefix}_salt).state > (0.6 + 5.0 - 0.8 * id(sensor_${blueriiot_id_prefix}_temperature).state) ) {
+              id(text_sensor_${blueriiot_id_prefix}_salt).publish_state("HIGH");
+            } else if ( id(sensor_${blueriiot_id_prefix}_salt).state < ( -0.6 + 5.0 - 0.8 * id(sensor_${blueriiot_id_prefix}_temperature).state) ) {
+              id(text_sensor_${blueriiot_id_prefix}_salt).publish_state("LOW");
+            } else {
+              id(text_sensor_${blueriiot_id_prefix}_salt).publish_state("GOOD");
+            };
 #
   - platform: template 
     id: sensor_${blueriiot_id_prefix}_ecs
