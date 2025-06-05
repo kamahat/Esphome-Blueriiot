@@ -26,28 +26,12 @@ substitutions:
 #
 # =====================
 # Source Info : https://community.home-assistant.io/t/blue-connect-pool-measurements/118901/420?page=11
-#
-#
 # =====================
-# rev 2024-06-26
-#
-# Salt revision 
-# from :             # float salt = (float)( (int16_t) (x[8]<< 8) + x[7]) / 25.0;
-# to :              #float salt = (float)( -1.828 * log(( ((int16_t)(x[8]<< 8) + x[7]) * log(temperature)) - 197.369) + 14.076 );
-# Bat revision
-# from : float bat = (float)( (int16_t) x[11]) ;
-# to : float bat = (float)( (int16_t) x[11]) / 37 * 100;
-# to : float bat = (float)( (int16_t) x[11]) / 36 * 100;
+# rev 2025-06-05
+# - All LOW/GOOD/BAD relation for Salt concentraiton linkted to temperature
+# - correcte chlorine sensor
 # =====================
-# rev 2024-08-23
 #
-# Salt revision 
-# from :              #float salt = (float)( -1.828 * log(( ((int16_t)(x[8]<< 8) + x[7]) * log(temperature)) - 197.369) + 14.076 );
-# to : float salt = (float) (int16_t) 1 / (raw_cond * 0.001) * 1.0615 * 500 / 1000 ;
-# Conductivity
-# from : float cond = (float)( (int16_t) (x[10]<< 8) + x[9]) / 0.4134;
-# to  : float cond = (float) (int16_t) 1 / (raw_cond * 0.000001) * 1.0615 ;
-# =====================
 esphome:
   name: ${device_name}
   area: ${device_area}
@@ -56,7 +40,6 @@ esp32:
   board: ${board}
   framework:
     type: esp-idf
-
 
 # Packages :
 packages : 
